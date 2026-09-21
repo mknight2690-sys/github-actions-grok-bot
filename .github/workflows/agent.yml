@@ -1,0 +1,298 @@
+name: Cloud Agent (Multi-step + Persistent)
+
+on:
+  workflow_dispatch:
+    inputs:
+      task:
+        description: 'Task / prompt for the agent'
+        required: true
+        type: string
+      model:
+        description: 'Model (prefer free ones)'
+        required: false
+        default: 'openai/gpt-oss-20b'
+        type: string
+      max_steps:
+        description: 'Max reasoning steps'
+        required: false
+        default: '8'
+        type: string
+      mode:
+        description: 'Mode: once | continue (resume last conversation)'
+        required: false
+        default: 'once'
+        type: string
+
+  # Closest thing to "always on" on free GitHub Actions
+  # Runs every 5 minutes. Comment out or change schedule if you want less usage.
+  schedule:
+    - cron: '*/5 * * * *'   # every 5 minutes
+
+jobs:
+  run-agent:
+    runs-on: ubuntu-latest
+    # Prevent concurrent runs from overlapping too badly
+    concurrency:
+      group: cloud-agent
+      cancel-in-progress: false
+
+    permissions:
+      contents: write
+      pull-requests: write
+      issues: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install deps
+        run: |
+          npm init -y
+          npm install openai
+
+      - name: Prepare persistent state
+        run: |
+          mkdir -p .agent-state
+          if [ ! -f .agent-state/memory.json ]; then
+            echo '{"messages":[],"last_task":"","last_answer":"","updated":""}' > .agent-state/memory.json
+          fi
+          if [ ! -f .agent-state/inbox.txt ]; then
+            echo "" > .agent-state/inbox.txt
+          fi
+
+      - name: Run multi-step agent
+        id: agent
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          OPENAI_BASE_URL: ${{ secrets.OPENAI_BASE_URL || 'https://openrouter.ai/api/v1' }}
+          TASK: ${{ inputs.task || '' }}
+          MODEL: ${{ inputs.model || 'openai/gpt-oss-20b' }}
+          MAX_STEPS: ${{ inputs.max_steps || '8' }}
+          MODE: ${{ inputs.mode || 'once' }}
+          IS_SCHEDULED: ${{ github.event_name == 'schedule' }}
+        run: |
+          node << 'SCRIPT'
+          const OpenAI = require('openai');
+          const fs = require('fs');
+          const { execSync } = require('child_process');
+
+          const client = new OpenAI({
+            apiKey: process.env.OPENAI_API_KEY || 'missing',
+            baseURL: process.env.OPENAI_BASE_URL || 'https://openrouter.ai/api/v1',
+          });
+
+          const model = process.env.MODEL || 'openai/gpt-oss-20b';
+          const maxSteps = parseInt(process.env.MAX_STEPS || '8', 10);
+          const mode = process.env.MODE || 'once';
+          const isScheduled = process.env.IS_SCHEDULED === 'true';
+
+          // Load persistent memory
+          let memory = { messages: [], last_task: '', last_answer: '', updated: '' };
+          try {
+            memory = JSON.parse(fs.readFileSync('.agent-state/memory.json', 'utf8'));
+          } catch {}
+
+          // Determine the task
+          let task = process.env.TASK || '';
+          if (!task && isScheduled) {
+            // On schedule: check inbox for new work, otherwise do a light heartbeat
+            const inbox = fs.readFileSync('.agent-state/inbox.txt', 'utf8').trim();
+            if (inbox) {
+              task = inbox;
+              // Clear inbox after picking it up
+              fs.writeFileSync('.agent-state/inbox.txt', '');
+            } else {
+              task = 'Heartbeat: briefly summarize your last state and confirm you are still alive. Keep reply under 100 words.';
+            }
+          }
+          if (!task) task = 'Say hello and confirm the agent is working.';
+
+          const system = `You are a persistent multi-step agent running inside GitHub Actions.
+You maintain memory across runs via .agent-state/memory.json.
+
+Available tools (reply with exact JSON when you want to use one):
+- {"tool": "run_shell", "command": "ls -la"}
+- {"tool": "write_file", "path": "notes.md", "content": "..."}
+- {"tool": "read_file", "path": "notes.md"}
+- {"tool": "remember", "key": "something", "value": "important fact"}
+- {"tool": "finish", "answer": "final answer here"}
+
+Always reason before acting. When the task is complete, call the finish tool.
+Current date: ${new Date().toISOString()}
+Last task you did: ${memory.last_task || '(none)'}
+Last answer: ${(memory.last_answer || '').slice(0, 300)}`;
+
+          let messages = [
+            { role: 'system', content: system },
+          ];
+
+          // Resume previous conversation if mode=continue and we have history
+          if (mode === 'continue' && memory.messages && memory.messages.length > 0) {
+            messages = messages.concat(memory.messages.slice(-12)); // keep last few turns
+          }
+
+          messages.push({ role: 'user', content: task });
+
+          let finalAnswer = '';
+          let stepsLog = [];
+
+          async function callModel() {
+            try {
+              const res = await client.chat.completions.create({
+                model,
+                messages,
+                max_tokens: 1200,
+                temperature: 0.3,
+              });
+              return res.choices[0]?.message?.content || '';
+            } catch (err) {
+              return `ERROR: ${err.message}`;
+            }
+          }
+
+          function tryParseTool(text) {
+            const match = text.match(/\{[\s\S]*?"tool"[\s\S]*?\}/);
+            if (!match) return null;
+            try { return JSON.parse(match[0]); } catch { return null; }
+          }
+
+          function executeTool(toolCall) {
+            const { tool } = toolCall;
+            try {
+              if (tool === 'run_shell') {
+                const out = execSync(toolCall.command || 'echo no command', {
+                  encoding: 'utf8', timeout: 20000, cwd: process.cwd(),
+                });
+                return `Shell output:\n${out}`;
+              }
+              if (tool === 'write_file') {
+                fs.writeFileSync(toolCall.path || 'agent-file.txt', toolCall.content || '');
+                return `Wrote file: ${toolCall.path}`;
+              }
+              if (tool === 'read_file') {
+                if (!fs.existsSync(toolCall.path)) return `File not found: ${toolCall.path}`;
+                return fs.readFileSync(toolCall.path, 'utf8');
+              }
+              if (tool === 'remember') {
+                memory[toolCall.key || 'note'] = toolCall.value || '';
+                return `Remembered: ${toolCall.key}`;
+              }
+              if (tool === 'finish') {
+                return { finished: true, answer: toolCall.answer || '' };
+              }
+              return `Unknown tool: ${tool}`;
+            } catch (err) {
+              return `Tool error: ${err.message}`;
+            }
+          }
+
+          (async () => {
+            console.log('=== Persistent Multi-step Agent ===');
+            console.log('Mode:', mode, '| Scheduled:', isScheduled);
+            console.log('Task:', task);
+            console.log('Model:', model);
+            console.log('');
+
+            for (let step = 1; step <= maxSteps; step++) {
+              console.log(`--- Step ${step} ---`);
+              const reply = await callModel();
+              console.log(reply);
+              stepsLog.push({ step, reply });
+
+              if (reply.startsWith('ERROR:')) {
+                finalAnswer = reply;
+                break;
+              }
+
+              const toolCall = tryParseTool(reply);
+              if (toolCall) {
+                const result = executeTool(toolCall);
+                if (result && result.finished) {
+                  finalAnswer = result.answer;
+                  console.log('Agent finished.');
+                  break;
+                }
+                messages.push({ role: 'assistant', content: reply });
+                messages.push({ role: 'user', content: `Tool result:\n${typeof result === 'string' ? result : JSON.stringify(result)}` });
+              } else {
+                messages.push({ role: 'assistant', content: reply });
+                if (step === maxSteps || reply.toLowerCase().includes('final answer') || reply.length > 250) {
+                  finalAnswer = reply;
+                  break;
+                }
+                messages.push({ role: 'user', content: 'Continue. Use a tool if needed, or call finish when done.' });
+              }
+            }
+
+            if (!finalAnswer) {
+              finalAnswer = stepsLog.map(s => `Step ${s.step}:\n${s.reply}`).join('\n\n') || 'No answer produced.';
+            }
+
+            // Persist memory
+            memory.last_task = task;
+            memory.last_answer = finalAnswer;
+            memory.updated = new Date().toISOString();
+            memory.messages = messages.slice(-20); // keep recent context
+            fs.writeFileSync('.agent-state/memory.json', JSON.stringify(memory, null, 2));
+
+            const md = `# Persistent Agent Result
+
+**When:** ${new Date().toISOString()}
+**Mode:** ${mode} ${isScheduled ? '(scheduled)' : ''}
+**Task:** ${task}
+**Model:** ${model}
+**Steps used:** ${stepsLog.length}
+
+---
+
+## Final Answer
+
+${finalAnswer}
+
+---
+
+## Full Trace
+
+${stepsLog.map(s => `### Step ${s.step}\n\`\`\`\n${s.reply}\n\`\`\``).join('\n\n')}
+`;
+
+            fs.writeFileSync('agent-result.md', md);
+            fs.writeFileSync('agent-result.txt', finalAnswer);
+            console.log('\n=== Done ===');
+            console.log(finalAnswer.slice(0, 400));
+          })().catch(err => {
+            console.error(err);
+            fs.writeFileSync('agent-result.txt', `Fatal error: ${err.message}`);
+            process.exit(1);
+          });
+          SCRIPT
+
+      - name: Commit persistent state
+        run: |
+          git config user.name "Cloud Agent"
+          git config user.email "agent@users.noreply.github.com"
+          git add .agent-state/ || true
+          git add agent-result.md agent-result.txt || true
+          git diff --staged --quiet || git commit -m "agent: update memory $(date -u +%Y-%m-%dT%H:%M:%SZ)" || true
+          git push || true
+
+      - name: Upload result
+        uses: actions/upload-artifact@v4
+        with:
+          name: agent-result
+          path: |
+            agent-result.md
+            agent-result.txt
+            .agent-state/
+          retention-days: 14
+
+      - name: Summary
+        run: |
+          echo "## Persistent Agent Result" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          cat agent-result.md >> $GITHUB_STEP_SUMMARY || true

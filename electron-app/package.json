@@ -1,0 +1,35 @@
+{
+  "name": "cloud-agent-controller",
+  "version": "1.0.0",
+  "description": "Local Electron controller for free GitHub Actions cloud agent",
+  "main": "src/main.js",
+  "scripts": {
+    "start": "electron .",
+    "pack": "electron-builder --dir",
+    "dist": "electron-builder --win --x64",
+    "dist:win": "electron-builder --win --x64"
+  },
+  "build": {
+    "appId": "com.free.cloudagent",
+    "productName": "Cloud Agent Controller",
+    "directories": {
+      "output": "dist"
+    },
+    "win": {
+      "target": ["portable", "nsis"],
+      "icon": null
+    },
+    "files": [
+      "src/**/*",
+      "package.json"
+    ]
+  },
+  "dependencies": {
+    "@octokit/rest": "^21.0.2",
+    "adm-zip": "^0.5.16"
+  },
+  "devDependencies": {
+    "electron": "^33.2.0",
+    "electron-builder": "^25.1.8"
+  }
+}

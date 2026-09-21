@@ -1,0 +1,10 @@
+node_modules/
+dist/
+agent-result*.zip
+agent-result.md
+agent-result.txt
+*.log
+.DS_Store
+electron-app/dist/
+electron-app/node_modules/
+cli/node_modules/
