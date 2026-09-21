@@ -7,8 +7,16 @@
     {
       "role": "user",
       "content": "say hello"
+    },
+    {
+      "role": "assistant",
+      "content": "Hello! 👋 How can I help you today?"
+    },
+    {
+      "role": "user",
+      "content": "Continue or call finish when done."
     }
   ],
   "last_task": "say hello",
-  "last_answer": "ERROR: 400 status code (no body)"
+  "last_answer": "Hello! 👋 How can I help you today?"
 }
