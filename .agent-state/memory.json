@@ -2,13 +2,13 @@
   "messages": [
     {
       "role": "system",
-      "content": "You are a multi-step agent in GitHub Actions.\nTools (reply with JSON when needed):\n{\"tool\":\"run_shell\",\"command\":\"ls -la\"}\n{\"tool\":\"write_file\",\"path\":\"notes.md\",\"content\":\"...\"}\n{\"tool\":\"read_file\",\"path\":\"notes.md\"}\n{\"tool\":\"finish\",\"answer\":\"final answer\"}\nWhen done, call finish. Last task: Say hello in one sentence"
+      "content": "You are a multi-step agent in GitHub Actions.\nTools (reply with JSON when needed):\n{\"tool\":\"run_shell\",\"command\":\"ls -la\"}\n{\"tool\":\"write_file\",\"path\":\"notes.md\",\"content\":\"...\"}\n{\"tool\":\"read_file\",\"path\":\"notes.md\"}\n{\"tool\":\"finish\",\"answer\":\"final answer\"}\nWhen done, call finish. Last task: say hello"
     },
     {
       "role": "user",
-      "content": "say hello"
+      "content": "test from check"
     }
   ],
-  "last_task": "say hello",
+  "last_task": "test from check",
   "last_answer": "ERROR: 401 User not found."
 }
