@@ -1,11 +1,19 @@
 const { app, BrowserWindow, ipcMain } = require('electron');
 const path = require('path');
 const fs = require('fs');
-const { Octokit } = require('@octokit/rest');
 const AdmZip = require('adm-zip');
 
 let mainWindow;
-let loopAbort = false; // used to stop infinite loops
+let loopAbort = false;
+let Octokit = null;
+
+async function getOctokit() {
+  if (!Octokit) {
+    const mod = await import('@octokit/rest');
+    Octokit = mod.Octokit;
+  }
+  return Octokit;
+}
 
 function createWindow() {
   mainWindow = new BrowserWindow({
@@ -43,9 +51,9 @@ ipcMain.handle('stop-loop', () => {
 });
 
 async function runOneAgent({ token, owner, repo, model, task, maxSteps, mode }) {
-  const octokit = new Octokit({ auth: token });
+  const OctokitClass = await getOctokit();
+  const octokit = new OctokitClass({ auth: token });
 
-  // Quick credential check
   try {
     await octokit.users.getAuthenticated();
   } catch (err) {
@@ -136,7 +144,6 @@ ipcMain.handle('run-agent', async (_, opts) => {
   return runOneAgent(opts);
 });
 
-// Infinite loop: keep running the same task until user clicks Stop
 ipcMain.handle('run-loop', async (_, opts) => {
   loopAbort = false;
   const results = [];
@@ -168,11 +175,9 @@ ipcMain.handle('run-loop', async (_, opts) => {
         });
       }
 
-      // Short pause between iterations so we don't spam Actions
       await new Promise(r => setTimeout(r, 8000));
     } catch (err) {
-      if (loopAbort || err.message.includes('Loop stopped')) break;
-      // On other errors, wait a bit and continue the loop
+      if (loopAbort || (err.message && err.message.includes('Loop stopped'))) break;
       if (mainWindow && !mainWindow.isDestroyed()) {
         mainWindow.webContents.send('status', {
           status: `Iteration ${iteration} error: ${err.message} — retrying in 15s`,
@@ -188,7 +193,8 @@ ipcMain.handle('run-loop', async (_, opts) => {
 });
 
 ipcMain.handle('queue-inbox', async (_, { token, owner, repo, task }) => {
-  const octokit = new Octokit({ auth: token });
+  const OctokitClass = await getOctokit();
+  const octokit = new OctokitClass({ auth: token });
 
   try {
     await octokit.users.getAuthenticated();
