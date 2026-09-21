@@ -4,14 +4,14 @@ const { execSync } = require("child_process");
 
 const client = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY || "missing",
-  baseURL: process.env.OPENAI_BASE_URL || "https://openrouter.ai/api/v1",
+  baseURL: process.env.OPENAI_BASE_URL || "https://inference-api.nousresearch.com/v1",
   defaultHeaders: {
     "HTTP-Referer": "https://github.com/mknight2690-sys/github-actions-grok-bot",
     "X-Title": "Cloud Agent",
   },
 });
 
-const model = process.env.MODEL || "openai/gpt-oss-20b";
+const model = process.env.MODEL || "poolside/laguna-s-2.1:free";
 const maxSteps = parseInt(process.env.MAX_STEPS || "8", 10);
 const mode = process.env.MODE || "once";
 const isScheduled = process.env.EVENT_NAME === "schedule";
