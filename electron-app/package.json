@@ -5,6 +5,7 @@
   "main": "src/main.js",
   "scripts": {
     "start": "electron .",
+    "start:debug": "electron . --enable-logging",
     "pack": "electron-builder --dir",
     "dist": "electron-builder --win --x64",
     "dist:win": "electron-builder --win --x64"
@@ -16,8 +17,7 @@
       "output": "dist"
     },
     "win": {
-      "target": ["portable", "nsis"],
-      "icon": null
+      "target": ["portable", "nsis"]
     },
     "files": [
       "src/**/*",
@@ -26,10 +26,10 @@
   },
   "dependencies": {
     "@octokit/rest": "^21.0.2",
-    "adm-zip": "^0.5.16"
+    "adm-zip": "^0.5.16",
+    "electron": "^33.2.0"
   },
   "devDependencies": {
-    "electron": "^33.2.0",
     "electron-builder": "^25.1.8"
   }
 }
