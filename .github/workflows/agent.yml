@@ -10,7 +10,7 @@ on:
       model:
         description: Model name
         required: false
-        default: openai/gpt-oss-20b
+        default: 'poolside/laguna-s-2.1:free'
         type: string
       max_steps:
         description: Max steps
