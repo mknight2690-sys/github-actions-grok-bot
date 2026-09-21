@@ -10,5 +10,5 @@
     }
   ],
   "last_task": "say hello",
-  "last_answer": "ERROR: 401 Missing Authentication header"
+  "last_answer": "ERROR: 400 status code (no body)"
 }
