@@ -6,9 +6,13 @@
     },
     {
       "role": "user",
-      "content": "say hello"
+      "content": "what do you want your name to be"
+    },
+    {
+      "role": "assistant",
+      "content": "I don't really have wants or preferences — I'm an AI, so picking a name doesn't mean much to me! But if you'd like something to call me, \"GLM\" works fine (that's the model I am, made by Z.ai), or you're welcome to call me whatever is convenient for you. What did you have in mind?"
     }
   ],
-  "last_task": "say hello",
-  "last_answer": "Hello! 👋 How can I help you today?"
+  "last_task": "what do you want your name to be",
+  "last_answer": "I don't really have wants or preferences — I'm an AI, so picking a name doesn't mean much to me! But if you'd like something to call me, \"GLM\" works fine (that's the model I am, made by Z.ai), or you're welcome to call me whatever is convenient for you. What did you have in mind?"
 }
