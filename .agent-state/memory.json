@@ -2,13 +2,13 @@
   "messages": [
     {
       "role": "system",
-      "content": "You are a multi-step agent in GitHub Actions.\nTools (reply with JSON when needed):\n{\"tool\":\"run_shell\",\"command\":\"ls -la\"}\n{\"tool\":\"write_file\",\"path\":\"notes.md\",\"content\":\"...\"}\n{\"tool\":\"read_file\",\"path\":\"notes.md\"}\n{\"tool\":\"finish\",\"answer\":\"final answer\"}\nWhen done, call finish. Last task: say hello"
+      "content": "You are a multi-step agent in GitHub Actions.\nTools (reply with JSON when needed):\n{\"tool\":\"run_shell\",\"command\":\"ls -la\"}\n{\"tool\":\"write_file\",\"path\":\"notes.md\",\"content\":\"...\"}\n{\"tool\":\"read_file\",\"path\":\"notes.md\"}\n{\"tool\":\"finish\",\"answer\":\"final answer\"}\nWhen done, call finish. Last task: test from check"
     },
     {
       "role": "user",
-      "content": "test from check"
+      "content": "say hello"
     }
   ],
-  "last_task": "test from check",
-  "last_answer": "ERROR: 401 User not found."
+  "last_task": "say hello",
+  "last_answer": "ERROR: 401 Missing Authentication header"
 }
