@@ -22,6 +22,11 @@ on:
         required: false
         default: once
         type: string
+      openrouter_key:
+        description: Optional OpenRouter API key (overrides secret)
+        required: false
+        type: string
+        default: ""
   schedule:
     - cron: "*/5 * * * *"
 
@@ -55,8 +60,8 @@ jobs:
 
       - name: Run agent
         env:
-          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
-          OPENAI_BASE_URL: ${{ secrets.OPENAI_BASE_URL }}
+          OPENAI_API_KEY: ${{ inputs.openrouter_key || secrets.OPENAI_API_KEY }}
+          OPENAI_BASE_URL: ${{ secrets.OPENAI_BASE_URL || 'https://openrouter.ai/api/v1' }}
           TASK: ${{ inputs.task }}
           MODEL: ${{ inputs.model }}
           MAX_STEPS: ${{ inputs.max_steps }}

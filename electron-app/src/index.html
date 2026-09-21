@@ -37,9 +37,7 @@
     .btn.secondary { background: #21262d; }
     .btn.secondary:hover { background: #30363d; }
     .btn.danger { background: #da3633; }
-    .btn.danger:hover { background: #f85149; }
     .btn.loop { background: #8957e5; }
-    .btn.loop:hover { background: #a371f7; }
     .content { display: flex; flex-direction: column; padding: 16px 20px; overflow: hidden; }
     .status { font-size: 13px; color: #8b949e; margin-bottom: 12px; min-height: 20px; }
     .result {
@@ -48,35 +46,38 @@
       font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
       font-size: 13px; line-height: 1.5;
     }
-    .link { color: #58a6ff; text-decoration: none; }
-    .link:hover { text-decoration: underline; }
+    .link { color: #58a6ff; }
     .hint { font-size: 11px; color: #8b949e; margin-top: 10px; line-height: 1.45; }
     .error-box {
       background: #3d1a1a; border: 1px solid #da3633; border-radius: 6px;
       padding: 10px; margin-top: 10px; font-size: 12px; color: #ffb4b0; white-space: pre-wrap;
+      display: none;
     }
   </style>
 </head>
 <body>
   <header>
     <h1>Persistent Cloud Agent</h1>
-    <span class="badge">GitHub Actions + Memory + Loop</span>
+    <span class="badge">GitHub Actions + OpenRouter</span>
   </header>
   <div class="main">
     <div class="sidebar">
-      <label>GitHub Token (must have repo + workflow)</label>
+      <label>GitHub Token (repo + workflow)</label>
       <input type="password" id="token" placeholder="ghp_..." />
 
+      <label>OpenRouter API Key</label>
+      <input type="password" id="openrouterKey" placeholder="sk-or-v1-..." />
+
       <label>Owner</label>
-      <input type="text" id="owner" placeholder="your-username" />
+      <input type="text" id="owner" placeholder="mknight2690-sys" />
 
       <label>Repository</label>
-      <input type="text" id="repo" placeholder="your-repo" />
+      <input type="text" id="repo" placeholder="github-actions-grok-bot" />
 
       <label>Model</label>
       <input type="text" id="model" value="openai/gpt-oss-20b" />
 
-      <label>Max steps per run</label>
+      <label>Max steps</label>
       <input type="number" id="maxSteps" value="8" min="1" max="15" />
 
       <label>Mode</label>
@@ -91,15 +92,14 @@
       <button class="btn" id="runBtn">Run Once</button>
       <button class="btn loop" id="loopBtn">Loop Forever</button>
       <button class="btn danger" id="stopBtn" disabled>Stop Loop</button>
-      <button class="btn secondary" id="inboxBtn">Queue for next scheduled run</button>
+      <button class="btn secondary" id="inboxBtn">Queue for schedule</button>
       <button class="btn secondary" id="saveBtn">Save Settings</button>
 
-      <div id="errorBox" class="error-box" style="display:none;"></div>
-
+      <div id="errorBox" class="error-box"></div>
       <p class="hint">
-        <b>Loop Forever</b> keeps re-running the same prompt (with memory) until you click Stop.<br><br>
-        Scheduled wake-ups still happen every 5 minutes.<br><br>
-        <b>Bad credentials?</b> Create a new classic PAT with scopes <code>repo</code> + <code>workflow</code>.
+        Paste your OpenRouter key in the box above (from openrouter.ai/keys).<br>
+        Owner: mknight2690-sys<br>
+        Repo: github-actions-grok-bot
       </p>
     </div>
     <div class="content">
@@ -110,13 +110,13 @@
 
   <script>
     const { ipcRenderer } = require('electron');
-    let looping = false;
 
     async function load() {
       const cfg = await ipcRenderer.invoke('get-config');
       document.getElementById('token').value = cfg.token || '';
-      document.getElementById('owner').value = cfg.owner || '';
-      document.getElementById('repo').value = cfg.repo || '';
+      document.getElementById('openrouterKey').value = cfg.openrouterKey || '';
+      document.getElementById('owner').value = cfg.owner || 'mknight2690-sys';
+      document.getElementById('repo').value = cfg.repo || 'github-actions-grok-bot';
       document.getElementById('model').value = cfg.model || 'openai/gpt-oss-20b';
     }
     load();
@@ -124,6 +124,7 @@
     function getPayload() {
       return {
         token: document.getElementById('token').value.trim(),
+        openrouterKey: document.getElementById('openrouterKey').value.trim(),
         owner: document.getElementById('owner').value.trim(),
         repo: document.getElementById('repo').value.trim(),
         model: document.getElementById('model').value.trim(),
@@ -145,7 +146,8 @@
     document.getElementById('saveBtn').onclick = async () => {
       const p = getPayload();
       await ipcRenderer.invoke('save-config', {
-        token: p.token, owner: p.owner, repo: p.repo, model: p.model,
+        token: p.token, openrouterKey: p.openrouterKey,
+        owner: p.owner, repo: p.repo, model: p.model,
       });
       document.getElementById('status').textContent = 'Settings saved.';
       clearError();
@@ -154,19 +156,21 @@
     document.getElementById('runBtn').onclick = async () => {
       const payload = getPayload();
       if (!payload.token || !payload.owner || !payload.repo || !payload.task) {
-        showError('Fill Token, Owner, Repo and Task.');
+        showError('Fill GitHub Token, Owner, Repo and Task.');
+        return;
+      }
+      if (!payload.openrouterKey) {
+        showError('Paste your OpenRouter API key (sk-or-v1-...) in the OpenRouter box.');
         return;
       }
       clearError();
       document.getElementById('runBtn').disabled = true;
-      document.getElementById('loopBtn').disabled = true;
       document.getElementById('status').textContent = 'Dispatching...';
       document.getElementById('result').textContent = '';
-
       try {
         const res = await ipcRenderer.invoke('run-agent', payload);
         document.getElementById('status').innerHTML =
-          `Finished. <a class="link" href="${res.url}" target="_blank">View run #${res.runId}</a>`;
+          'Finished. <a class="link" href="' + res.url + '" target="_blank">View run #' + res.runId + '</a>';
         document.getElementById('result').textContent = res.resultText;
       } catch (err) {
         showError(err.message || String(err));
@@ -174,32 +178,25 @@
         document.getElementById('result').textContent = err.message || String(err);
       } finally {
         document.getElementById('runBtn').disabled = false;
-        document.getElementById('loopBtn').disabled = false;
       }
     };
 
     document.getElementById('loopBtn').onclick = async () => {
       const payload = getPayload();
       if (!payload.token || !payload.owner || !payload.repo || !payload.task) {
-        showError('Fill Token, Owner, Repo and Task.');
+        showError('Fill required fields.');
         return;
       }
       clearError();
-      looping = true;
       document.getElementById('runBtn').disabled = true;
       document.getElementById('loopBtn').disabled = true;
       document.getElementById('stopBtn').disabled = false;
-      document.getElementById('status').textContent = 'Starting infinite loop...';
-      document.getElementById('result').textContent = '';
-
       try {
         await ipcRenderer.invoke('run-loop', payload);
         document.getElementById('status').textContent = 'Loop stopped.';
       } catch (err) {
         showError(err.message || String(err));
-        document.getElementById('status').textContent = 'Loop error / stopped';
       } finally {
-        looping = false;
         document.getElementById('runBtn').disabled = false;
         document.getElementById('loopBtn').disabled = false;
         document.getElementById('stopBtn').disabled = true;
@@ -208,20 +205,14 @@
 
     document.getElementById('stopBtn').onclick = async () => {
       await ipcRenderer.invoke('stop-loop');
-      document.getElementById('status').textContent = 'Stopping loop after current run...';
+      document.getElementById('status').textContent = 'Stopping after current run...';
     };
 
     document.getElementById('inboxBtn').onclick = async () => {
       const p = getPayload();
-      if (!p.token || !p.owner || !p.repo || !p.task) {
-        showError('Fill Token, Owner, Repo and Task.');
-        return;
-      }
       try {
         await ipcRenderer.invoke('queue-inbox', p);
-        clearError();
-        document.getElementById('status').textContent =
-          'Task queued. Next scheduled run (every 5 min) will pick it up.';
+        document.getElementById('status').textContent = 'Queued for next scheduled run.';
       } catch (err) {
         showError(err.message || String(err));
       }
@@ -229,14 +220,13 @@
 
     ipcRenderer.on('status', (_, data) => {
       let t = data.status || '';
-      if (data.runId) t = `Run #${data.runId} — ${data.status}${data.conclusion ? ' (' + data.conclusion + ')' : ''}`;
+      if (data.runId) t = 'Run #' + data.runId + ' — ' + data.status + (data.conclusion ? ' (' + data.conclusion + ')' : '');
       document.getElementById('status').textContent = t;
     });
 
     ipcRenderer.on('loop-result', (_, data) => {
       const el = document.getElementById('result');
-      const header = `\n\n========== LOOP ITERATION ${data.iteration} (run #${data.runId}) ==========\n`;
-      el.textContent = (el.textContent || '') + header + data.resultText;
+      el.textContent = (el.textContent || '') + '\n\n===== LOOP ' + data.iteration + ' =====\n' + data.resultText;
       el.scrollTop = el.scrollHeight;
     });
   </script>

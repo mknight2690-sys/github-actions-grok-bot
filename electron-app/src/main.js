@@ -18,7 +18,7 @@ async function getOctokit() {
 function createWindow() {
   mainWindow = new BrowserWindow({
     width: 1040,
-    height: 780,
+    height: 800,
     webPreferences: {
       nodeIntegration: true,
       contextIsolation: false,
@@ -36,7 +36,9 @@ app.on('window-all-closed', () => {
 const configPath = path.join(app.getPath('userData'), 'config.json');
 function loadConfig() {
   try { return JSON.parse(fs.readFileSync(configPath, 'utf8')); }
-  catch { return { token: '', owner: '', repo: '', model: 'openai/gpt-oss-20b' }; }
+  catch {
+    return { token: '', owner: '', repo: '', model: 'openai/gpt-oss-20b', openrouterKey: '' };
+  }
 }
 function saveConfig(cfg) {
   fs.writeFileSync(configPath, JSON.stringify(cfg, null, 2));
@@ -44,13 +46,9 @@ function saveConfig(cfg) {
 
 ipcMain.handle('get-config', () => loadConfig());
 ipcMain.handle('save-config', (_, cfg) => { saveConfig(cfg); return true; });
+ipcMain.handle('stop-loop', () => { loopAbort = true; return true; });
 
-ipcMain.handle('stop-loop', () => {
-  loopAbort = true;
-  return true;
-});
-
-async function runOneAgent({ token, owner, repo, model, task, maxSteps, mode }) {
+async function runOneAgent({ token, owner, repo, model, task, maxSteps, mode, openrouterKey }) {
   const OctokitClass = await getOctokit();
   const octokit = new OctokitClass({ auth: token });
 
@@ -58,28 +56,26 @@ async function runOneAgent({ token, owner, repo, model, task, maxSteps, mode }) 
     await octokit.users.getAuthenticated();
   } catch (err) {
     if (err.status === 401) {
-      throw new Error(
-        'Bad credentials (401). Your GitHub token is invalid, expired, or missing scopes.\n\n' +
-        'Fix:\n' +
-        '1. Create a new classic Personal Access Token\n' +
-        '2. Enable scopes: repo  AND  workflow\n' +
-        '3. Paste the new token (starts with ghp_) into the app\n' +
-        '4. Make sure there are no extra spaces or quotes'
-      );
+      throw new Error('Bad GitHub credentials (401). Use a classic PAT with repo + workflow scopes.');
     }
     throw err;
+  }
+
+  const inputs = {
+    task,
+    model: model || 'openai/gpt-oss-20b',
+    max_steps: String(maxSteps || 8),
+    mode: mode || 'once',
+  };
+  if (openrouterKey && openrouterKey.trim()) {
+    inputs.openrouter_key = openrouterKey.trim();
   }
 
   await octokit.actions.createWorkflowDispatch({
     owner, repo,
     workflow_id: 'agent.yml',
     ref: 'main',
-    inputs: {
-      task,
-      model: model || 'openai/gpt-oss-20b',
-      max_steps: String(maxSteps || 8),
-      mode: mode || 'once',
-    },
+    inputs,
   });
 
   let runId = null;
@@ -93,7 +89,7 @@ async function runOneAgent({ token, owner, repo, model, task, maxSteps, mode }) 
       break;
     }
   }
-  if (!runId) throw new Error('Could not find workflow run. Is agent.yml on the main branch?');
+  if (!runId) throw new Error('Could not find workflow run.');
 
   let status = 'in_progress';
   let conclusion = null;
@@ -109,7 +105,7 @@ async function runOneAgent({ token, owner, repo, model, task, maxSteps, mode }) 
   }
 
   if (conclusion !== 'success') {
-    throw new Error(`Workflow finished with: ${conclusion}. Check the Actions tab.`);
+    throw new Error('Workflow finished with: ' + conclusion);
   }
 
   const { data: artifacts } = await octokit.actions.listWorkflowRunArtifacts({
@@ -122,7 +118,7 @@ async function runOneAgent({ token, owner, repo, model, task, maxSteps, mode }) 
     owner, repo, artifact_id: artifact.id, archive_format: 'zip',
   });
 
-  const zipPath = path.join(app.getPath('temp'), `agent-result-${runId}.zip`);
+  const zipPath = path.join(app.getPath('temp'), 'agent-result-' + runId + '.zip');
   fs.writeFileSync(zipPath, Buffer.from(zipData));
 
   const zip = new AdmZip(zipPath);
@@ -135,7 +131,7 @@ async function runOneAgent({ token, owner, repo, model, task, maxSteps, mode }) 
   return {
     runId,
     resultText: resultText || 'No text result',
-    url: `https://github.com/${owner}/${repo}/actions/runs/${runId}`,
+    url: 'https://github.com/' + owner + '/' + repo + '/actions/runs/' + runId,
   };
 }
 
@@ -146,65 +142,29 @@ ipcMain.handle('run-agent', async (_, opts) => {
 
 ipcMain.handle('run-loop', async (_, opts) => {
   loopAbort = false;
-  const results = [];
   let iteration = 0;
-
   while (!loopAbort) {
     iteration += 1;
     if (mainWindow && !mainWindow.isDestroyed()) {
-      mainWindow.webContents.send('status', {
-        status: `loop iteration ${iteration} starting...`,
-        conclusion: null,
-        runId: null,
-      });
+      mainWindow.webContents.send('status', { status: 'loop iteration ' + iteration, conclusion: null, runId: null });
     }
-
     try {
-      const res = await runOneAgent({
-        ...opts,
-        mode: iteration === 1 ? (opts.mode || 'once') : 'continue',
-      });
-      results.push(res);
-
+      const res = await runOneAgent({ ...opts, mode: iteration === 1 ? (opts.mode || 'once') : 'continue' });
       if (mainWindow && !mainWindow.isDestroyed()) {
-        mainWindow.webContents.send('loop-result', {
-          iteration,
-          resultText: res.resultText,
-          url: res.url,
-          runId: res.runId,
-        });
+        mainWindow.webContents.send('loop-result', { iteration, resultText: res.resultText, url: res.url, runId: res.runId });
       }
-
       await new Promise(r => setTimeout(r, 8000));
     } catch (err) {
       if (loopAbort || (err.message && err.message.includes('Loop stopped'))) break;
-      if (mainWindow && !mainWindow.isDestroyed()) {
-        mainWindow.webContents.send('status', {
-          status: `Iteration ${iteration} error: ${err.message} — retrying in 15s`,
-          conclusion: null,
-          runId: null,
-        });
-      }
       await new Promise(r => setTimeout(r, 15000));
     }
   }
-
-  return { stopped: true, iterations: iteration, lastResults: results.slice(-3) };
+  return { stopped: true, iterations: iteration };
 });
 
 ipcMain.handle('queue-inbox', async (_, { token, owner, repo, task }) => {
   const OctokitClass = await getOctokit();
   const octokit = new OctokitClass({ auth: token });
-
-  try {
-    await octokit.users.getAuthenticated();
-  } catch (err) {
-    if (err.status === 401) {
-      throw new Error('Bad credentials. Create a new classic token with repo + workflow scopes.');
-    }
-    throw err;
-  }
-
   let sha = null;
   let content = task + '\n';
   try {
@@ -213,9 +173,8 @@ ipcMain.handle('queue-inbox', async (_, { token, owner, repo, task }) => {
     content = Buffer.from(data.content, 'base64').toString('utf8') + task + '\n';
   } catch {}
   await octokit.repos.createOrUpdateFileContents({
-    owner, repo,
-    path: '.agent-state/inbox.txt',
-    message: 'agent: queue task for scheduled run',
+    owner, repo, path: '.agent-state/inbox.txt',
+    message: 'agent: queue task',
     content: Buffer.from(content).toString('base64'),
     sha: sha || undefined,
   });

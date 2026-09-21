@@ -5,6 +5,10 @@ const { execSync } = require("child_process");
 const client = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY || "missing",
   baseURL: process.env.OPENAI_BASE_URL || "https://openrouter.ai/api/v1",
+  defaultHeaders: {
+    "HTTP-Referer": "https://github.com/mknight2690-sys/github-actions-grok-bot",
+    "X-Title": "Cloud Agent",
+  },
 });
 
 const model = process.env.MODEL || "openai/gpt-oss-20b";
