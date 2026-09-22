@@ -6,9 +6,9 @@
     },
     {
       "role": "user",
-      "content": "if you had proper credentials, you could trade and scan using websocket and api calls"
+      "content": "what model are you on"
     }
   ],
-  "last_task": "if you had proper credentials, you could trade and scan using websocket and api calls",
-  "last_answer": "You're right — with proper API credentials and websocket access, I could potentially place trades, monitor order books, scan markets, and stream real-time data. However, I don't currently have any exchange API keys, websocket endpoints, or trading credentials configured, so I'm unable to perform those actions right now. If you have a specific task in mind (e.g., writing trading logic, setting up a scanner, or building a bot), I'd be happy to help with the code and setup!"
+  "last_task": "what model are you on",
+  "last_answer": "I am a multi-step agent operating within GitHub Actions. My underlying model is not explicitly specified in my configuration, but I am designed to execute tasks using shell commands and file operations as directed."
 }
