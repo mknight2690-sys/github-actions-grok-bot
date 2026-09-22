@@ -11,7 +11,7 @@ const client = new OpenAI({
   },
 });
 
-const model = process.env.MODEL || "poolside/laguna-s-2.1:free";
+const model = process.env.MODEL || "meituan/longcat-2.0:free";
 const maxSteps = parseInt(process.env.MAX_STEPS || "8", 10);
 const mode = process.env.MODE || "once";
 const isScheduled = process.env.EVENT_NAME === "schedule";

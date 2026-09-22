@@ -10,7 +10,7 @@ on:
       model:
         description: Model name
         required: false
-        default: 'poolside/laguna-s-2.1:free'
+        default: 'meituan/longcat-2.0:free'
         type: string
       max_steps:
         description: Max steps
@@ -28,7 +28,7 @@ on:
         type: string
         default: ""
   schedule:
-    - cron: "*/5 * * * *"
+    - cron: "*/10 * * * *"
 
 jobs:
   run-agent:
@@ -61,7 +61,7 @@ jobs:
       - name: Run agent
         env:
           OPENAI_API_KEY: ${{ inputs.openrouter_key || secrets.OPENAI_API_KEY }}
-          OPENAI_BASE_URL: ${{ secrets.OPENAI_BASE_URL || 'https://openrouter.ai/api/v1' }}
+          OPENAI_BASE_URL: ${{ secrets.OPENAI_BASE_URL || 'https://inference-api.nousresearch.com/v1' }}
           TASK: ${{ inputs.task }}
           MODEL: ${{ inputs.model }}
           MAX_STEPS: ${{ inputs.max_steps }}
