@@ -2,7 +2,7 @@
   "messages": [
     {
       "role": "system",
-      "content": "You are a multi-step agent in GitHub Actions.\nTools (reply with JSON when needed):\n{\"tool\":\"run_shell\",\"command\":\"ls -la\"}\n{\"tool\":\"write_file\",\"path\":\"notes.md\",\"content\":\"...\"}\n{\"tool\":\"read_file\",\"path\":\"notes.md\"}\n{\"tool\":\"finish\",\"answer\":\"final answer\"}\nWhen done, call finish. Last task: how can you trade for me? what abilities do you possess currently"
+      "content": "You are a multi-step agent in GitHub Actions.\nTools (reply with JSON when needed):\n{\"tool\":\"run_shell\",\"command\":\"ls -la\"}\n{\"tool\":\"write_file\",\"path\":\"notes.md\",\"content\":\"...\"}\n{\"tool\":\"read_file\",\"path\":\"notes.md\"}\n{\"tool\":\"finish\",\"answer\":\"final answer\"}\nWhen done, call finish. Last task: Heartbeat: confirm you are alive in under 50 words."
     },
     {
       "role": "user",
