@@ -6,9 +6,17 @@
     },
     {
       "role": "user",
-      "content": "Heartbeat: confirm you are alive in under 50 words."
+      "content": "say hello"
+    },
+    {
+      "role": "assistant",
+      "content": "Hello! 👋 I’m alive and ready to help."
+    },
+    {
+      "role": "user",
+      "content": "Continue or call finish when done."
     }
   ],
-  "last_task": "Heartbeat: confirm you are alive in under 50 words.",
-  "last_answer": "Agent alive and operational. Ready to assist with GitHub Actions tasks."
+  "last_task": "say hello",
+  "last_answer": "I’m alive and ready to help."
 }
